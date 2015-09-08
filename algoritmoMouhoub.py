@@ -1,17 +1,14 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
-Algorithm to build a PERT graph based on Malek Mouhoub et. al algorithm
+Algorithm to build a PERT graph based on method of Malek Mouhoub
 
-Copyright 2007-15 University of Cordoba (Spain)
 """
+
 import namedlist
 
 import fileFormats
 import validation
 import pert
 import graph
-import zConfiguration
 import mouhoubRules
 
 
@@ -35,15 +32,12 @@ def mouhoub(prelations):
     end_act = graph.ending_activities(successors)
 
   
-    # Step 0. Remove Z Configuration. Update the prelation table in complete_bipartite dictionary
-    complete_bipartite = successors
-    complete_bipartite.update(zConfiguration.zconf(successors))  
-    
     
     # STEPS TO BUILD THE PERT GRAPH
     
     #Step 1. Save the prelations in the work table
-    complete_bipartite = graph.successors2precedents(complete_bipartite) 
+    complete_bipartite = graph.successors2precedents(Zconf(successors))
+    
     
     work_table = {}
     for act, sucesores in complete_bipartite.items():
@@ -109,25 +103,15 @@ def mouhoub(prelations):
     
     G5_6 = mouhoubRules.rule_5_6(successors_copy, work_table, G4)
     
-    G3a = mouhoubRules.rule_3(G5_6, work_table)
+    G3_4 = mouhoubRules.rule_3(G5_6, work_table)
     
-    G4a = mouhoubRules.rule_4(G3a, work_table)
-    
-    G7 =  mouhoubRules.rule_7(successors_copy, successors, G4a, node)
+    G7 = mouhoubRules.rule_7(successors_copy, successors, G3_4, node)
     
     work_table_final = {}
     for act, sucesores in G7.items():
         work_table_final[act] = Columns([], [], [], sucesores.dummy, sucesores.suc, sucesores.start_node, sucesores.end_node, [])
     
-    
-    #Step 5. Delete Dummy Cycles
-    for act, sucesores in work_table_final.items():
-        for act2, sucesores2 in work_table_final.items():
-            if act != act2:
-                if sucesores.end_node == sucesores2.end_node and sucesores.start_node == sucesores2.start_node:
-                    if act not in successors:
-                        del work_table_final[act]
-                   
+
                    
     #Step 6. Generate the graph
     pm_graph = pert.PertMultigraph()
@@ -141,6 +125,36 @@ def mouhoub(prelations):
 
 
 
+def Zconf(successors):
+    """
+    Insert a new dummy activity and update the table
+    
+    return complete_bipartite (PERT network withour Z Configuration)
+    """
+    complete_bipartite = successors
+    
+    # Build a PERT network according to Sterboul algorithm
+    for act, columns in successors.items():
+        for dummy in columns:
+   
+            node = act + "|" + dummy
+           
+            if not complete_bipartite.has_key(act):
+                complete_bipartite[act] = successors[act]
+            new_suc = list(complete_bipartite[act])
+        
+            complete_bipartite[node] = [dummy]
+            new_suc.append(node)
+                                
+            if dummy in new_suc:
+                new_suc.remove(dummy)
+            complete_bipartite[act] = list(set(new_suc))  
+            
+    return complete_bipartite
+    
+    
+    
+    
 def main():
     """
     Test Mouhoub algorithm

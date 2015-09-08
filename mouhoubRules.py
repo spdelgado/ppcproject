@@ -89,6 +89,7 @@ def rule_2(work_table_pred, work_table):
     
 
 
+
 def rule_3(work_table_G2, work_table):
     """
     Rule 3 - If a vertex X has one predecessor vertex Y, then contract both vertices in one vertex and delete the resulting loop
@@ -103,16 +104,20 @@ def rule_3(work_table_G2, work_table):
             # Contract node with only one dummy predecessor
             if work_table[extra].dummy == True:
                 v = str(extra).partition(separator)
-                work_table[v[2]].start_node = work_table[v[0]].end_node 
-                work_table[extra].aux = True
-                    
+                try:
+                    work_table_G2[v[2]].start_node = work_table[v[0]].end_node 
+                    work_table_G2[extra].aux = True
+                except:
+                    pass
+                
     # Save the graph after the modification. Input graph G2 results graph G3
     work_table_G3 = {}
-    for act, columns in work_table.items():
+    for act, columns in work_table_G2.items():
         if columns.aux != True:
             work_table_G3[act] = Columns(columns.pre, columns.su, columns.blocked, columns.dummy, columns.suc, columns.start_node, columns.end_node, columns.aux)
-
+        
     return work_table_G3
+
 
 
 
@@ -129,13 +134,11 @@ def rule_4(work_table_G3, work_table):
                 
             # Contract node with only one dummy successor
             if work_table[extra].dummy == True:
-                
                     v = str(extra).partition(separator)
                     
                     work_table[v[0]].end_node = work_table[v[2]].start_node 
                     work_table_G4[extra].aux = True
 
-                    
                     for act2, arcs2 in work_table_G3.items():
                         if arcs2.su == arcs.su:
                             work_table[act2].end_node = work_table[v[2]].start_node 
@@ -149,6 +152,8 @@ def rule_4(work_table_G3, work_table):
     return work_table_G4
 
 
+
+
 def rule_5_6(work_table_suc, work_table, work_table_G4):
     """
     Rule 5 - If successors of x are a superset of successors of y, then delete common activities and connect with a dummy arc from x to y
@@ -156,47 +161,49 @@ def rule_5_6(work_table_suc, work_table, work_table_G4):
       
     return work_table_G5_G6
     """
-    visited = []
-    new = set()
-    remove = set()
-    snode = []
-    svertex = []
+
+    deleted = []
     
-    for act, arcs1, in reversed(sorted(work_table_suc.items())):
-        for act2, arcs2, in work_table_suc.items():
-            
-            # Update prelations if a subgraph is a subset 
-            if len(arcs1) > 0 and act2 not in visited and set(arcs1).issubset(set(arcs2)) and act != act2 and len(arcs1) + 1 == len(arcs2):
-                common = set(arcs1) & set(arcs2)
-                not_common = set(arcs1) ^ set(arcs2)
-                new = set(work_table_G4[act2].su)
-                        
-                for u in common:
-                    work_table[d_node(act2, u)].aux = True
-                    remove.add(d_node(act2, u))
-                    new.discard(d_node(act2, u))
-
-                for u in not_common:
-                    new.add(d_node(act2, u))    
-                    
-                if act not in snode and work_table_G4[act2].end_node not in svertex:
-                    work_table[d_node(act2, act)] = Columns(work_table_G4[act2].pre, arcs1, act, True, None, work_table_G4[act2].end_node, work_table_G4[act].end_node, False)
-                    new.add(d_node(act2, act))
-                    work_table[act2].su = list(new)
-                    work_table[act2].aux = False
-                    svertex.append(work_table_G4[act2].end_node)
-                    visited.append(act2)
-
-    # Save the graph after the modification. Input graph G4 is concerted in graph G5/G6 
     work_table_G5_G6 = {}
-    for act, columns in work_table.items():
+    
+    for act, arcs1, in work_table_suc.items():
+        cubierto = set()
+        for act2 in sorted(sorted(work_table_suc), key=lambda k: len(work_table_suc[k]), reverse=True):
+       
+            # Update prelations if a subgraph is a subperset of another subgrap
+            if set(arcs1).issuperset(set(work_table_suc[act2])) and act != act2:
+                common = set(arcs1) & set(work_table_suc[act2])
+                if not common.issubset(cubierto):
+                    for y in common:
+                        if work_table_G4[act].end_node != work_table_G4[act2].end_node:
+                                
+                                work_table_G5_G6[d_node(act, act2)] = Columns([act], work_table_G4[act2].su, work_table_G4[act2].blocked, True, work_table_G4[act2].suc, work_table_G4[act].end_node, work_table_G4[act2].end_node, None)
+                                deleted.append(str(act) + separator + str(y))
+                                cubierto.add(y)   
+                                try:
+                                    del work_table_G4[str(act) + separator + str(y)]
+                                except:
+                                    pass
+
+    # Remove dummy redundancy
+    for act, columns in work_table_G5_G6.items():
+        for act2, columns2 in work_table_G5_G6.items():
+            if act!=act2 and act in work_table_G5_G6 and columns.dummy == True and columns2.dummy == True and columns.start_node == columns2.start_node and columns.end_node == columns2.end_node:
+                del work_table_G5_G6[act]
+                
+                
+    # Save the graph after the modification. Input graph G4 is concerted in graph G5/G6 
+    for act, columns in work_table_G4.items():
         if columns.aux != True:
             pred = set(columns.pre)
             for q in columns.pre:
-                if q in remove:
+                if q in deleted:
                     pred.discard(q)
             work_table_G5_G6[act] = Columns(pred, columns.su, columns.blocked, columns.dummy, columns.suc, columns.start_node, columns.end_node, columns.aux)
     
+    
+
+               
     return work_table_G5_G6
 
 
@@ -291,7 +298,7 @@ def rule_7(successors_copy, successors, work_table, node):
                             # Insert dummy activities in the work table
                             for t in temp_com:
                                 work_table[d_node(node, t)] = Columns(None, None, None, True, t, node, work_table[t].start_node, None)
-                            
+
                             node += 1
 
     # Save the graph after the modification. Input graph G5/G6 results graph G7     
